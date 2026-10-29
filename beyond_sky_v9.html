@@ -1,0 +1,262 @@
+<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>beyond Sky</title><style>
+*{box-sizing:border-box}body{margin:0;background:#101b30;color:#eaf6ff;font-family:system-ui,sans-serif;display:flex;justify-content:center;min-height:100dvh}#shell{width:min(100%,560px);min-height:100dvh;background:linear-gradient(150deg,#273f62,#10192e);padding:13px;display:flex;flex-direction:column;gap:10px}.brand{display:flex;justify-content:space-between;align-items:center;letter-spacing:3px;font-weight:900;color:#c8f5ff}.brand small{font-size:10px;letter-spacing:1px;color:#88b8d2}.screen{position:relative;border:7px solid #071225;border-radius:17px;overflow:hidden;background:#7cc6e5;aspect-ratio:1.22;box-shadow:0 6px 0 #405a78,0 12px 25px #0006}#view{width:100%;height:100%;display:block}.hud{position:absolute;top:10px;left:12px;right:12px;display:flex;justify-content:space-between;font-weight:900;text-shadow:0 2px 4px #123b62;font-size:13px;pointer-events:none}.overlay{position:absolute;inset:0;background:#0a1d35dc;display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto}.panel{width:100%;max-width:370px;text-align:center}.panel h1{margin:4px 0 8px;font-size:30px;letter-spacing:2px}.panel p{font-size:13px;line-height:1.55;color:#c7e4f5}.drawbox{position:relative;background:#f2fbff;border-radius:12px;border:3px solid #65d7e8;overflow:hidden;height:165px;margin:10px auto}.drawbox:after{content:'✦  羽根を描こう  ✦';position:absolute;top:8px;left:0;right:0;color:#9aafc2;font-size:12px;pointer-events:none}#draw{width:100%;height:100%;touch-action:none;display:block}.row{display:flex;gap:8px;justify-content:center;margin:10px 0}.btn{border:0;border-radius:10px;background:#5ce2d4;color:#09243b;font-weight:900;padding:12px 18px;cursor:pointer;box-shadow:0 4px 0 #229b99}.btn.secondary{background:#c2d7e9;box-shadow:0 4px 0 #7b9bb5}.tools{margin:5px 0;gap:5px}.tools .btn{padding:7px 8px;font-size:11px;background:#c2d7e9;box-shadow:0 2px 0 #789ab5}.tools .btn.active{background:#5ce2d4;box-shadow:0 2px 0 #229b99}.stats{font-size:13px;color:#8af9e8;font-weight:bold}.rank{background:#09182b;border-radius:12px;padding:10px;margin:12px 0;text-align:left}.rank div{padding:3px 8px;border-bottom:1px solid #29435d;font-size:13px}.rank b{color:#77f4dd}.control{flex:1;min-height:190px;border:2px solid #3b5b7c;border-radius:18px;background:radial-gradient(circle at 50% 30%,#324d71,#1c304d);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;box-shadow:inset 0 3px 12px #081628}.label{font-size:11px;color:#9fc1d7;letter-spacing:3px}.stick{width:min(49vw,174px);height:min(49vw,174px);border-radius:50%;border:3px solid #7897b7;background:radial-gradient(circle,#243c5c 0 25%,#152944 70%);position:relative;touch-action:none;box-shadow:inset 0 5px 14px #091528,0 4px 8px #091528}.stick:before,.stick:after{content:'';position:absolute;background:#58779455;pointer-events:none}.stick:before{width:2px;height:90%;top:5%;left:50%}.stick:after{height:2px;width:90%;left:5%;top:50%}.knob{width:66px;height:66px;border-radius:50%;background:radial-gradient(circle at 35% 25%,#9ef9f1,#3c9bb7 75%);border:4px solid #c7ffff;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);box-shadow:0 5px 12px #0007;pointer-events:none}.foot{text-align:center;color:#829fb9;font-size:10px;padding-bottom:3px}#pause{position:absolute;bottom:10px;right:10px;background:#102942b8;color:white;border:1px solid #fff6;border-radius:7px;padding:6px 9px;display:none}#toast{position:absolute;bottom:10px;left:10px;color:white;font-size:12px;text-shadow:0 1px 4px black;pointer-events:none}</style></head><body><div id="shell"><div class="brand">BEYOND SKY <small>FLIGHT SYSTEM · 01</small></div><div class="screen"><canvas id="view"></canvas><div class="hud"><span id="score">SCORE 000000</span><span id="speed">WING 1.00×</span></div><div id="toast"></div><button id="pause">Ⅱ</button><div class="overlay" id="overlay"><div class="panel" id="panel"></div></div></div><div class="control"><div class="label">◈ FLIGHT CONTROLLER ◈</div><div class="stick" id="stick"><div class="knob" id="knob"></div></div><div class="label">DRAG TO FLY · RELEASE TO CENTER</div></div><div class="foot">beyond Sky — Draw your wings. Chase the horizon.</div></div><script src="https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.min.js"></script><script>
+const view=document.getElementById('view'),ctx=view.getContext('2d'),overlay=document.getElementById('overlay'),panel=document.getElementById('panel'),scoreEl=document.getElementById('score'),speedEl=document.getElementById('speed'),pauseBtn=document.getElementById('pause');let W=500,H=400,dpr=1,mode='menu',last=0,score=0,wing=1,player={x:0,y:0},objects=[],spawn=0,travel=0,stickX=0,stickY=0,wingPixels=[],wingArt=null,wingBounds=null,drawing=false,drawCtx=null,drawCanvas=null,keys={};const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));function resize(){let r=view.getBoundingClientRect();dpr=Math.min(devicePixelRatio||1,2);W=r.width;H=r.height;view.width=W*dpr;view.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}addEventListener('resize',resize);resize();
+function menu(){mode='menu';if(stageLabel)stageLabel.style.display='none';impact=null;if(impactMarker&&scene3){scene3.remove(impactMarker);impactMarker.geometry.dispose();impactMarker.material.dispose();impactMarker=null;}if(speedFX)speedFX.style.opacity='1';document.getElementById('toast').removeAttribute('style');overlay.style.display='flex';pauseBtn.style.display='none';panel.innerHTML=`<h1>beyond Sky</h1><p>自分だけの羽根を描いて、空の果てまで飛ぼう。<br>描いた羽根の形がそのまま翼＆当たり判定になる！<br>羽根が大きいほど、上下左右の移動が速くなる！</p><div class="drawbox"><canvas id="draw"></canvas></div><div class="row tools"><button class="btn tool active" data-tool="brush">✏️ ペン</button><button class="btn tool" data-tool="fill">🪣 塗りつぶし</button><button class="btn tool" data-tool="eraser">消しゴム</button></div><div class="stats" id="wingInfo">羽根の大きさ：0%　機動力：1.00×</div><div class="row"><button class="btn secondary" id="clear">全消去</button><button class="btn" id="start">飛び立つ ▶</button></div><p>画面下のスティックを動かして障害物を避けよう。<br>PCでは矢印キー / WASD も使用可能。</p>`;setupDraw();document.getElementById('clear').onclick=()=>{drawCtx.clearRect(0,0,drawCanvas.width,drawCanvas.height);calcWing()};document.getElementById('start').onclick=startGame}
+let drawTool='brush';
+function setupDraw(){
+ drawTool='brush';drawCanvas=document.getElementById('draw');let rect=drawCanvas.getBoundingClientRect();drawCanvas.width=Math.round(rect.width*2);drawCanvas.height=Math.round(rect.height*2);drawCtx=drawCanvas.getContext('2d');
+ document.querySelectorAll('[data-tool]').forEach(btn=>btn.onclick=()=>{drawTool=btn.dataset.tool;document.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('active',b===btn))});
+ let prev=null;function point(e){let r=drawCanvas.getBoundingClientRect();return{x:Math.floor((e.clientX-r.left)*drawCanvas.width/r.width),y:Math.floor((e.clientY-r.top)*drawCanvas.height/r.height)}}
+ function stroke(a,b){drawCtx.save();drawCtx.globalCompositeOperation=drawTool==='eraser'?'destination-out':'source-over';drawCtx.lineWidth=drawTool==='eraser'?35:18;drawCtx.lineCap='round';drawCtx.lineJoin='round';drawCtx.strokeStyle='#307fbb';drawCtx.beginPath();drawCtx.moveTo(a.x,a.y);drawCtx.lineTo(b.x,b.y);drawCtx.stroke();drawCtx.restore()}
+ function fillAt(pt){const w=drawCanvas.width,h=drawCanvas.height;if(pt.x<0||pt.y<0||pt.x>=w||pt.y>=h)return;const img=drawCtx.getImageData(0,0,w,h),d=img.data,idx=(pt.y*w+pt.x)*4,base=[...d.slice(idx,idx+4)],target=[48,127,187,255];if(base.every((v,i)=>v===target[i]))return;const seen=new Uint8Array(w*h),stack=[pt.y*w+pt.x];let count=0;while(stack.length){let n=stack.pop();if(seen[n])continue;seen[n]=1;let k=n*4;if(Math.abs(d[k]-base[0])>5||Math.abs(d[k+1]-base[1])>5||Math.abs(d[k+2]-base[2])>5||Math.abs(d[k+3]-base[3])>5)continue;d[k]=target[0];d[k+1]=target[1];d[k+2]=target[2];d[k+3]=255;let x=n%w,y=(n/w)|0;if(x>0)stack.push(n-1);if(x<w-1)stack.push(n+1);if(y>0)stack.push(n-w);if(y<h-1)stack.push(n+w);if(++count>w*h)break}drawCtx.putImageData(img,0,0)}
+ drawCanvas.onpointerdown=e=>{let pt=point(e);if(drawTool==='fill'){fillAt(pt);calcWing();return}drawing=true;drawCanvas.setPointerCapture(e.pointerId);prev=pt;stroke(pt,pt);calcWing()};drawCanvas.onpointermove=e=>{if(!drawing)return;let pt=point(e);stroke(prev,pt);prev=pt;calcWing()};drawCanvas.onpointerup=drawCanvas.onpointercancel=()=>{drawing=false;calcWing()};
+}
+function calcWing(){if(!drawCtx)return;let {data}=drawCtx.getImageData(0,0,drawCanvas.width,drawCanvas.height);let filled=0;for(let i=3;i<data.length;i+=16)if(data[i]>80)filled++;let coverage=clamp(filled/(drawCanvas.width*drawCanvas.height/4)*100,0,100);wing=1+clamp(coverage/27,0,1)*2.3;let el=document.getElementById('wingInfo');if(el)el.textContent=`羽根の大きさ：${Math.round(coverage)}%　機動力：${wing.toFixed(2)}×`}
+function startGame(){calcWing();wingArt=document.createElement('canvas');wingArt.width=drawCanvas.width;wingArt.height=drawCanvas.height;wingArt.getContext('2d').drawImage(drawCanvas,0,0);
+ const pixels=wingArt.getContext('2d').getImageData(0,0,wingArt.width,wingArt.height).data;
+ let minX=wingArt.width,minY=wingArt.height,maxX=-1,maxY=-1;
+ for(let yy=0;yy<wingArt.height;yy+=2)for(let xx=0;xx<wingArt.width;xx+=2){
+  if(pixels[(yy*wingArt.width+xx)*4+3]>50){minX=Math.min(minX,xx);minY=Math.min(minY,yy);maxX=Math.max(maxX,xx);maxY=Math.max(maxY,yy)}
+ }
+ wingBounds=maxX>=0?{x:minX,y:minY,w:Math.max(1,maxX-minX+2),h:Math.max(1,maxY-minY+2)}:null;score=0;travel=0;spawn=.5;stageIndex=-1;stageInterval=-1;stageSequence=[];if(scene3){updateStageByScore();if(stageLabel)stageLabel.style.display='block';}impact=null;impactTimer=0;if(impactMarker){scene3.remove(impactMarker);impactMarker.geometry.dispose();impactMarker.material.dispose();impactMarker=null;}if(speedFX)speedFX.style.opacity='1';objects.forEach(o=>{if(o.mesh){world3.remove(o.mesh);o.mesh.traverse(n=>{if(n.isMesh){n.geometry.dispose();n.material.dispose()}})}});objects=[];player={x:0,y:0};mode='play';make3DWings();overlay.style.display='none';pauseBtn.style.display='block';speedEl.textContent=`WING ${wing.toFixed(2)}× · STAGE 1`;last=performance.now()}
+function finish(){mode='over';if(stageLabel)stageLabel.style.display='none';pauseBtn.style.display='none';let scores=[];try{scores=JSON.parse(localStorage.getItem('beyondSkyTop10')||'[]')}catch(e){}scores.push(Math.floor(score));scores.sort((a,b)=>b-a);scores=scores.slice(0,10);try{localStorage.setItem('beyondSkyTop10',JSON.stringify(scores))}catch(e){}overlay.style.display='flex';panel.innerHTML=`<h1>FLIGHT OVER</h1>${impact?`<p style='color:#ff9b9b;font-weight:900'>衝突地点：${impact.part} → ${impact.obstacle}</p>`:''}<p>今回のスコア</p><h1 style="color:#76ffe0">${Math.floor(score).toLocaleString()}</h1><div class="rank"><b>🏆 TOP 10 FLIGHTS</b>${scores.map((s,i)=>`<div>${String(i+1).padStart(2,'0')}　${s.toLocaleString()} ${i===0?'✦':''}</div>`).join('')}</div><div class="row"><button class="btn secondary" id="redraw">羽根を描き直す</button><button class="btn" id="retry">もう一度 ▶</button></div>`;document.getElementById('redraw').onclick=menu;document.getElementById('retry').onclick=startGame}
+
+
+let renderer3,scene3,camera3,craft3,world3,roadMarks=[],buildMeshes=[],clock3=0,customWings=[],wingHitCells=[],speedFX=null,speedCtx=null,fxTick=0,impact=null,impactTimer=0,impactMarker=null,stageIndex=-1,stageBannerTimer=0,stageLabel=null,ground3=null,road3=null,edge3=[],sun3=null,hemisphere3=null,trail3=[],clouds3=[],stageSequence=[],stageInterval=-1;
+function setup3D(){
+ if(!window.THREE){document.getElementById('toast').textContent='3Dライブラリを読み込めません。ネット接続を確認してください';return}
+ renderer3=new THREE.WebGLRenderer({antialias:true,alpha:false});renderer3.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer3.setSize(W,H);renderer3.setClearColor(0x94cfe5);
+ renderer3.domElement.style.cssText='position:absolute;inset:0;width:100%;height:100%;pointer-events:none';view.parentElement.insertBefore(renderer3.domElement,view);speedFX=document.createElement('canvas');speedFX.style.cssText='position:absolute;inset:0;width:100%;height:100%;pointer-events:none';view.parentElement.insertBefore(speedFX,view.nextSibling);speedFX.style.zIndex='2';speedCtx=speedFX.getContext('2d');speedFX.width=Math.round(W);speedFX.height=Math.round(H);view.style.visibility='hidden';
+ scene3=new THREE.Scene();scene3.background=new THREE.Color(0x8bc9e6);scene3.fog=new THREE.Fog(0x8bc9e6,65,230);
+ camera3=new THREE.PerspectiveCamera(78,W/H,.1,350);camera3.position.set(0,4.7,13);camera3.lookAt(0,3,-22);
+ hemisphere3=new THREE.HemisphereLight(0xe5f7ff,0x54736a,2.1);scene3.add(hemisphere3);sun3=new THREE.DirectionalLight(0xffedc1,2);sun3.position.set(-25,60,-55);scene3.add(sun3);
+ world3=new THREE.Group();scene3.add(world3);
+ const mat=(c)=>new THREE.MeshStandardMaterial({color:c,roughness:.78,side:THREE.DoubleSide});
+ let ground=new THREE.Mesh(new THREE.PlaneGeometry(400,600),mat(0x477b6c));ground3=ground;ground.rotation.x=-Math.PI/2;ground.position.z=-100;world3.add(ground);
+ let road=new THREE.Mesh(new THREE.PlaneGeometry(11,600),mat(0x394b5c));road3=road;road.rotation.x=-Math.PI/2;road.position.set(0,.025,-100);world3.add(road);
+ for(let side of [-1,1]){let edge=new THREE.Mesh(new THREE.BoxGeometry(.12,.06,600),mat(0xe5c28d));edge.position.set(side*5.5,.07,-100);world3.add(edge);edge3.push(edge)}
+ for(let i=0;i<30;i++){let dash=new THREE.Mesh(new THREE.BoxGeometry(.14,.04,3.4),mat(0xe9e3be));dash.position.set(0,.075,-i*9);world3.add(dash);roadMarks.push(dash)}
+ craft3=new THREE.Group();scene3.add(craft3);
+ let body=new THREE.Mesh(new THREE.CylinderGeometry(.23,.36,2.7,10),mat(0xe2f3f4));body.rotation.x=Math.PI/2;body.position.z=-.3;craft3.add(body);
+ let nose=new THREE.Mesh(new THREE.ConeGeometry(.23,.9,10),mat(0xc5e3ef));nose.rotation.x=-Math.PI/2;nose.position.z=-2.1;craft3.add(nose);
+ let cockpit=new THREE.Mesh(new THREE.SphereGeometry(.23,12,8),mat(0x1e5e86));cockpit.scale.set(1,.7,1.9);cockpit.position.set(0,.19,-.75);craft3.add(cockpit);
+ let tail=new THREE.Mesh(new THREE.BoxGeometry(.16,.8,.65),mat(0x2b7d9e));tail.position.set(0,.4,.75);craft3.add(tail);
+ for(let side of [-1,1]){let stab=new THREE.Mesh(new THREE.BoxGeometry(1.05,.09,.48),mat(0x70b9cb));stab.position.set(side*.75,.06,1);craft3.add(stab);let engine=new THREE.Mesh(new THREE.CylinderGeometry(.18,.18,.8,12),mat(0x315e77));engine.rotation.x=Math.PI/2;engine.position.set(side*.48,-.17,.5);craft3.add(engine)}
+ make3DWings();
+ // Low-poly skyline, decorative clouds, and glowing engine exhaust.
+ for(let i=0;i<70;i++){
+  let w=2+(i*17%8),h=4+(i*29%22),x=(i%2?-1:1)*(14+(i*13%50)),z=-((i*31)%240);
+  let mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,w),new THREE.MeshStandardMaterial({color:0x688b9c,roughness:1}));
+  mesh.position.set(x,h/2,z);world3.add(mesh);buildMeshes.push(mesh);
+ }
+ for(let i=0;i<14;i++){
+  let cloud=new THREE.Group();for(let j=0;j<4;j++){
+   let m=new THREE.Mesh(new THREE.IcosahedronGeometry(2.3+(j%2),0),new THREE.MeshBasicMaterial({color:0xf1f6ef,transparent:true,opacity:.55,depthWrite:false}));
+   m.scale.set(1.7,.45,.9);m.position.set(j*2.6,Math.sin(j)*.5,0);cloud.add(m);
+  }
+  cloud.position.set((i%2?-1:1)*(17+i*4),12+i%4*3,-(i*19)%230);world3.add(cloud);clouds3.push(cloud);
+ }
+ for(let side of [-1,1]){
+  let exhaust=new THREE.Mesh(new THREE.ConeGeometry(.15,2.4,7),new THREE.MeshBasicMaterial({color:0x79eaff,transparent:true,opacity:.7,depthWrite:false}));
+  exhaust.rotation.x=Math.PI/2;exhaust.position.set(side*.48,-.17,1.9);craft3.add(exhaust);trail3.push(exhaust);
+ }
+ stageLabel=document.createElement('div');stageLabel.style.cssText='position:absolute;top:43px;left:50%;transform:translateX(-50%);z-index:4;pointer-events:none;text-align:center;font-weight:900;color:white;text-shadow:0 2px 12px #082c4c;font-size:15px;letter-spacing:2px;white-space:nowrap';view.parentElement.appendChild(stageLabel);
+ stageLabel.style.display='none';
+}
+const STAGES=[
+ {name:'SKYLINE',sky:0x8bc9e6,fog:0x9bcbd4,ground:0x598a78,road:0x465763,light:0xfff0ce,buildings:[0x688b9c,0x8eaaa9,0x7893a8]},
+ {name:'SUNSET',sky:0xeaa17f,fog:0xd99b91,ground:0x8a766f,road:0x5a5268,light:0xffb878,buildings:[0xa17d83,0xb4938c,0x86738f]},
+ {name:'NIGHTFALL',sky:0x101c40,fog:0x273254,ground:0x2d4656,road:0x222e43,light:0x8aa7ff,buildings:[0x3a5272,0x536283,0x445d7a]},
+ {name:'MISTY BAY',sky:0xaccad1,fog:0x9eb8c1,ground:0x5c8589,road:0x516d77,light:0xd9f5f2,buildings:[0x6f99a4,0x90b6b5,0x718c99]},
+ {name:'GOLDEN HOUR',sky:0xf3c37d,fog:0xd9a47b,ground:0x8d9270,road:0x706b65,light:0xffd89c,buildings:[0x9d9385,0xb7a38c,0x877c80]}
+];
+function updateStageByScore(){
+ const interval=Math.floor(score/2500);
+ if(interval===stageInterval)return;
+ const prev=stageSequence.length?stageSequence[stageSequence.length-1]:-1;
+ const options=STAGES.map((_,i)=>i).filter(i=>i!==prev);
+ const chosen=interval===0?0:options[Math.floor(Math.random()*options.length)];
+ stageSequence.push(chosen);stageInterval=interval;applyStage(chosen,interval===0);
+}
+function applyStage(idx,instant=false){
+ if(stageIndex===idx)return;stageIndex=idx;
+ let st=STAGES[idx];scene3.background.setHex(st.sky);scene3.fog.color.setHex(st.fog);
+ ground3.material.color.setHex(st.ground);road3.material.color.setHex(st.road);
+ sun3.color.setHex(st.light);sun3.intensity=idx===2?1.35:2.2;
+ hemisphere3.intensity=idx===2?1.2:2.1;
+ buildMeshes.forEach((m,i)=>m.material.color.setHex(st.buildings[i%3]));
+ edge3.forEach(e=>e.material.color.setHex(idx===2?0x50e9ed:0xe5c28d));
+ clouds3.forEach(c=>c.visible=idx!==2);
+ if(stageLabel){stageLabel.style.display=mode==='play'?'block':'none';stageLabel.innerHTML=`<span style="font-size:11px;opacity:.8">STAGE ${idx+1}</span><br>${st.name}`;stageBannerTimer=instant?1.7:3.5;stageLabel.style.opacity='1'}
+}
+function make3DWings(){
+ if(!craft3)return;customWings.forEach(m=>{craft3.remove(m);m.geometry.dispose();m.material.dispose()});customWings=[];wingHitCells=[];if(!wingArt||!wingBounds)return;
+ // Each opaque pixel becomes part of the wing's actual silhouette.
+ const c=document.createElement('canvas');c.width=128;c.height=64;let cx=c.getContext('2d');cx.drawImage(wingArt,0,0,wingArt.width,wingArt.height,0,0,128,64);
+ const dat=cx.getImageData(0,0,128,64).data,verts=[],indices=[];
+ // Pixel-cell geometry is real 3D, with visible thickness and no rectangular backing.
+ let step=2,cols=64,rows=32;wingHitCells=[];
+ for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+  let a=dat[((y*2)*128+x*2)*4+3];if(a<65)continue;wingHitCells.push({x:.23+(x+.5)/cols*3.4,z:-1.15+(y+.5)/rows*1.6});
+  let x0=.23+x/cols*3.4,x1=.23+(x+1)/cols*3.4;
+  let z0=-1.15+y/rows*1.6,z1=-1.15+(y+1)/rows*1.6;
+  for(let sign of [-1,1]){
+   let v=verts.length/3;
+   verts.push(sign*x0,0,z0,sign*x1,0,z0,sign*x1,0,z1,sign*x0,0,z1);
+   indices.push(v,v+1,v+2,v,v+2,v+3);
+  }
+ }
+ if(!verts.length)return;
+ let geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));geometry.setIndex(indices);geometry.computeVertexNormals();
+ let wingMesh=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:0x46a7d9,side:THREE.DoubleSide,metalness:.2,roughness:.55}));craft3.add(wingMesh);customWings.push(wingMesh);
+}
+
+function spawnBuilding3(o){
+ if(!world3)return;
+ let group=new THREE.Group();group.position.set(o.x*1.35,0,-o.z*2.7);world3.add(group);o.mesh=group;
+ const material=(color)=>new THREE.MeshStandardMaterial({color,roughness:.78});
+ const box=(w,h,d,x,y,z,c)=>{
+  let m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material(c));
+  m.position.set(x,y,z);group.add(m);return m;
+ };
+ let width=o.r*1.7,height=o.height*2.1,depth=o.r*1.8;
+ if(o.type==='bridge'){
+  // Raised pedestrian bridge with two supports and a crossing deck.
+  let span=15, deckY=5.6;
+  box(span,.65,2.2,0,deckY,0,0x9aabb5);
+  box(span,.22,2.3,0,deckY+.5,0,0xd5b884);
+  for(let side of [-1,1]){
+   box(.55,deckY,1.7,side*6.8,deckY/2,0,0x607e8f);
+   for(let i=0;i<5;i++)box(.12,1.2,.12,side*(1.5+i*1.1),deckY+1.05,0,0xbad8e2);
+  }
+  box(span,.13,.16,0,deckY+1.65,0,0xd6e8e9);
+ }else if(o.type==='gate'){
+  let h=8,span=10;
+  for(let side of [-1,1])box(.9,h,1.3,side*span*.5,h/2,0,0x8099a4);
+  box(span+1,1.1,1.5,0,h,0,0xb4c9ce);
+  for(let i=-4;i<=4;i++)box(.09,1.2,.1,i, h+.9,0,0xe5d4ad);
+ }else if(o.type==='tower'){
+  box(width*.72,height,depth*.72,0,height/2,0,0x6c899f);
+  for(let j=0;j<4;j++)box(width*(1.2-j*.18),.32,depth*(1.2-j*.18),0,height*.25*(j+1),0,0xabc7c7);
+  box(.18,2,.18,0,height+1,0,0xe9dba9);
+ }else{
+  box(width,height,depth,0,height/2,0,o.color);
+  box(width+.2,.15,depth+.2,0,height+.07,0,0xb1cbd1);
+  for(let yy=.7;yy<height-.3;yy+=.85)
+   for(let xx=-width/2+.32;xx<width/2-.1;xx+=.48)
+    box(.18,.27,.025,xx,yy,-depth/2-.018,0xc9e9ce);
+ }
+}
+function collision3(o){
+ // Every collision sample uses the same coordinates as the visible 3D mesh.
+ // Wing cells have real X/Z coordinates; the central fuselage is deliberately narrow.
+ const px=player.x*1.25, py=3.4-player.y*1.2, pz=4;
+ const ox=o.x*1.35, oz=-o.z*2.7;
+ const parts=[];
+ const add=(cx,cy,cz,w,h,d,label)=>{
+   parts.push({cx:ox+cx,cy,cz:oz+cz,w,h,d,label});
+ };
+ const width=o.r*1.7,height=o.height*2.1,depth=o.r*1.8;
+ if(o.type==='bridge'){
+  add(0,5.6,0,15,.65,2.2,'橋の床');
+  add(0,6.1,0,15,.22,2.3,'橋の上部');
+  for(let side of [-1,1])add(side*6.8,2.8,0,.55,5.6,1.7,'橋の支柱');
+  add(0,7.25,0,15,.13,.16,'橋の手すり');
+ }else if(o.type==='gate'){
+  for(let side of [-1,1])add(side*5,4,0,.9,8,1.3,'ゲートの柱');
+  add(0,8,0,11,1.1,1.5,'ゲートの梁');
+ }else if(o.type==='tower'){
+  add(0,height/2,0,width*.72,height,depth*.72,'タワー');
+  for(let j=0;j<4;j++)add(0,height*.25*(j+1),0,width*(1.2-j*.18),.32,depth*(1.2-j*.18),'タワーの張り出し');
+  add(0,height+1,0,.18,2,.18,'アンテナ');
+ }else{
+  add(0,height/2,0,width,height,depth,'ビル');
+  add(0,height+.07,0,width+.2,.15,depth+.2,'ビルの屋上');
+ }
+ const samples=[
+  {x:px,y:py,z:pz,label:'機体本体',radiusX:.23,radiusY:.24,radiusZ:.9}
+ ];
+ // Downsample the drawn shape, but preserve its silhouette and gaps.
+ // Unlike the previous version, height and longitudinal distance matter.
+ for(let i=0;i<wingHitCells.length;i+=3){
+  const c=wingHitCells[i];
+  for(const side of [-1,1]){
+   samples.push({x:px+side*c.x,y:py,z:pz+c.z,label:side<0?'左翼':'右翼',radiusX:.035,radiusY:.06,radiusZ:.035});
+  }
+ }
+ for(const part of parts){
+  for(const q of samples){
+   if(Math.abs(q.x-part.cx)>part.w/2+q.radiusX ||
+      Math.abs(q.y-part.cy)>part.h/2+q.radiusY ||
+      Math.abs(q.z-part.cz)>part.d/2+q.radiusZ)continue;
+   const x=clamp(q.x,part.cx-part.w/2,part.cx+part.w/2);
+   const y=clamp(q.y,part.cy-part.h/2,part.cy+part.h/2);
+   const z=clamp(q.z,part.cz-part.d/2,part.cz+part.d/2);
+   return {x,y,z,part:q.label,obstacle:part.label};
+  }
+ }
+ return null;
+}
+function showImpact(hit){
+ if(mode!=='play')return;
+ impact=hit;impactTimer=1.05;mode='impact';pauseBtn.style.display='none';
+ const markerGeo=new THREE.SphereGeometry(.31,16,12);
+ const markerMat=new THREE.MeshBasicMaterial({color:0xff2424,transparent:true,opacity:.95,depthTest:false});
+ impactMarker=new THREE.Mesh(markerGeo,markerMat);
+ impactMarker.position.set(hit.x,hit.y,hit.z);
+ impactMarker.renderOrder=999;scene3.add(impactMarker);
+ const toast=document.getElementById('toast');
+ toast.style.cssText='position:absolute;z-index:9;bottom:18px;left:50%;transform:translateX(-50%);width:max-content;max-width:92%;background:#641b27ed;color:white;border:2px solid #ff6b6b;border-radius:10px;padding:9px 12px;font-size:14px;font-weight:900;text-align:center;pointer-events:none';
+ toast.textContent=`衝突！ ${hit.part} → ${hit.obstacle}`;
+ if(speedFX)speedFX.style.opacity='.3';
+}
+function speedEffects(dt,speed){
+ if(!speedCtx)return;
+ const c=speedCtx,w=c.canvas.width,h=c.canvas.height;
+ c.clearRect(0,0,w,h);
+ if(mode!=='play')return;
+ fxTick+=dt*speed;
+ const cx=w*.5,cy=h*.43;
+ c.lineCap='round';
+ for(let i=0;i<96;i++){
+  let a=i*2.39996,seed=(i*.61803398875)%1;
+  let t=(fxTick*(.012+seed*.009)+seed)%1;
+  let r=(.1+t*t*1.15)*Math.max(w,h);
+  let x=cx+Math.cos(a)*r,y=cy+Math.sin(a)*r*.72;
+  let length=(16+t*95)*(speed/18);
+  c.beginPath();c.moveTo(x,y);c.lineTo(x+Math.cos(a)*length,y+Math.sin(a)*length*.72);
+  c.strokeStyle=`rgba(224,248,255,${.07+t*.27})`;
+  c.lineWidth=.8+t*2.1;c.stroke();
+ }
+ let gradient=c.createRadialGradient(cx,cy,Math.min(w,h)*.26,cx,cy,Math.max(w,h)*.7);
+ gradient.addColorStop(0,'#ffffff00');gradient.addColorStop(1,'#d4f7ff1d');
+ c.fillStyle=gradient;c.fillRect(0,0,w,h);
+ // Keep the plane and its custom wings readable: no streaks over the aircraft.
+ c.save();c.globalCompositeOperation='destination-out';
+ const planeX=w*.5+player.x*w*.11,planeY=h*.67+player.y*h*.10;
+ const clear=c.createRadialGradient(planeX,planeY,Math.min(w,h)*.11,planeX,planeY,Math.min(w,h)*.38);
+ clear.addColorStop(0,'rgba(0,0,0,1)');clear.addColorStop(.55,'rgba(0,0,0,.97)');clear.addColorStop(1,'rgba(0,0,0,0)');
+ c.fillStyle=clear;c.fillRect(0,0,w,h);c.restore();
+}
+function render3D(dt){
+ if(!renderer3)return;
+ let rr=view.getBoundingClientRect();if(Math.abs(rr.width-W)>1||Math.abs(rr.height-H)>1){W=rr.width;H=rr.height;renderer3.setSize(W,H);camera3.aspect=W/H;camera3.updateProjectionMatrix();if(speedFX){speedFX.width=Math.round(W);speedFX.height=Math.round(H)}}
+ if(craft3){trail3.forEach((m,i)=>{m.scale.y=1+Math.sin(performance.now()*.017+i)*.17+Math.min(score/5000,.65);m.material.opacity=.45+Math.sin(performance.now()*.021+i)*.18});craft3.position.set(player.x*1.25,3.4-player.y*1.2,4);craft3.rotation.z=-stickX*.24;craft3.rotation.x=stickY*.08;}
+ // True chase camera: directly behind the aircraft, looking toward its nose (-Z).
+ camera3.position.set(craft3?craft3.position.x*.38:0,5.15,13.2);camera3.lookAt(craft3?craft3.position.x*.45:0,3,-31);camera3.fov=79+Math.min(score/650,18);camera3.updateProjectionMatrix();
+ if(mode==='play')for(let d of roadMarks){d.position.z+=dt*(12+Math.min(score/350,20))*2.7;if(d.position.z>14)d.position.z-=270}
+ for(let o of objects){if(o.mesh)o.mesh.position.z=-o.z*2.7}
+ if(stageLabel){stageLabel.style.display=(mode==='play'||mode==='impact')?'block':'none';if(stageBannerTimer>0){stageBannerTimer-=dt;stageLabel.style.opacity=String(Math.min(1,stageBannerTimer));}else stageLabel.style.opacity=mode==='play'?'.68':'0';}
+ renderer3.render(scene3,camera3);speedEffects(dt,12+Math.min(score/350,20));
+}
+function frame(now){requestAnimationFrame(frame);let dt=Math.min((now-last)/1000||0,.04);last=now;if(mode==='play'){let kx=(keys.ArrowRight||keys.d?1:0)-(keys.ArrowLeft||keys.a?1:0),ky=(keys.ArrowDown||keys.s?1:0)-(keys.ArrowUp||keys.w?1:0);let dx=clamp(stickX+kx,-1,1),dy=clamp(stickY+ky,-1,1);player.x=clamp(player.x+dx*dt*wing*2.2,-3.5,3.5);player.y=clamp(player.y+dy*dt*wing*2.2,-2.1,2.1);let speed=12+Math.min(score/350,20);travel+=dt*speed;score+=dt*speed*12;if(scene3)updateStageByScore();scoreEl.textContent='SCORE '+String(Math.floor(score)).padStart(6,'0');speedEl.textContent=`STAGE ${stageIndex+1} · WING ${wing.toFixed(2)}×`;spawn-=dt;if(spawn<=0){spawn=Math.max(.35,1.25-score/6500)*(.7+Math.random()*.55);{let roll=Math.random();let type=roll<.18?'bridge':roll<.34?'gate':roll<.53?'tower':'building';let o={type,x:type==='bridge'||type==='gate'?0:(Math.random()-.5)*8.2,y:-2.9,z:65,r:.75+Math.random()*.75,height:2+Math.random()*4,color:STAGES[Math.max(0,stageIndex)].buildings[Math.floor(Math.random()*3)]};objects.push(o);spawnBuilding3(o)}}for(let o of objects){o.z-=speed*dt;let hit=collision3(o);if(hit){showImpact(hit);break}}objects=objects.filter(o=>{if(o.z>-.5)return true;if(o.mesh){world3.remove(o.mesh);o.mesh.traverse(n=>{if(n.isMesh){n.geometry.dispose();n.material.dispose()}})}return false})}if(mode==='impact'){
+ impactTimer-=dt;
+ if(impactMarker){
+  impactMarker.scale.setScalar(1+Math.sin((1.05-impactTimer)*30)*.32);
+  impactMarker.material.opacity=.65+.35*Math.abs(Math.sin((1.05-impactTimer)*16));
+ }
+ if(impactTimer<=0){finish();document.getElementById('toast').textContent='';document.getElementById('toast').removeAttribute('style');}
+ }
+ render3D(dt);if(mode==='pause')document.getElementById('toast').textContent='PAUSED';else if(mode!=='impact')document.getElementById('toast').textContent='';}
+const stick=document.getElementById('stick'),knob=document.getElementById('knob');function moveStick(e){let r=stick.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,max=r.width*.32;let dx=e.clientX-cx,dy=e.clientY-cy,dist=Math.hypot(dx,dy),f=dist>max?max/dist:1;dx*=f;dy*=f;stickX=dx/max;stickY=dy/max;knob.style.left=`calc(50% + ${dx}px)`;knob.style.top=`calc(50% + ${dy}px)`}function resetStick(){stickX=stickY=0;knob.style.left='50%';knob.style.top='50%'}stick.onpointerdown=e=>{stick.setPointerCapture(e.pointerId);moveStick(e)};stick.onpointermove=e=>{if(stick.hasPointerCapture(e.pointerId))moveStick(e)};stick.onpointerup=stick.onpointercancel=resetStick;addEventListener('keydown',e=>{keys[e.key]=true;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault()});addEventListener('keyup',e=>keys[e.key]=false);pauseBtn.onclick=()=>{if(mode==='play'){mode='pause';pauseBtn.textContent='▶'}else if(mode==='pause'){mode='play';pauseBtn.textContent='Ⅱ';last=performance.now()}};document.addEventListener('visibilitychange',()=>{if(document.hidden&&mode==='play'){mode='pause';pauseBtn.textContent='▶'}});menu();setup3D();requestAnimationFrame(frame);
+</script></body></html>
